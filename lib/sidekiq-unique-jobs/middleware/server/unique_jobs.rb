@@ -1,10 +1,13 @@
 require 'digest'
+require 'sidekiq-unique-jobs/middleware/unlock_order'
 
 module SidekiqUniqueJobs
   module Middleware
     module Server
       class UniqueJobs
-        attr_reader :unlock_order, :redis_pool
+        include SidekiqUniqueJobs::Middleware::UnlockOrder
+
+        attr_reader :redis_pool
 
         def call(worker, item, queue, redis_pool = nil)
           @redis_pool = redis_pool
@@ -18,31 +21,6 @@ module SidekiqUniqueJobs
           if after_yield? || !defined? unlocked || unlocked != 1
             unlock(lock_key)
           end
-        end
-
-        def set_unlock_order(klass)
-          @unlock_order = if unlock_order_configured?(klass)
-            klass.get_sidekiq_options['unique_unlock_order']
-          else
-            default_unlock_order
-          end
-        end
-
-        def unlock_order_configured?(klass)
-          klass.respond_to?(:get_sidekiq_options) &&
-            !klass.get_sidekiq_options['unique_unlock_order'].nil?
-        end
-
-        def default_unlock_order
-          SidekiqUniqueJobs::Config.default_unlock_order
-        end
-
-        def before_yield?
-          unlock_order == :before_yield
-        end
-
-        def after_yield?
-          unlock_order == :after_yield
         end
 
         protected

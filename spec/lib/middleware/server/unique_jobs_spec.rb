@@ -38,6 +38,7 @@ module SidekiqUniqueJobs
 
           context "when worker hasn't specified unique_unlock_order" do
             it "falls back to configured default_unlock_order" do
+              UniqueWorker.sidekiq_options unique_unlock_order: nil
               SidekiqUniqueJobs::Config.default_unlock_order = :before_yield
               expect do
                 subject.set_unlock_order(UniqueWorker)

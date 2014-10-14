@@ -1,9 +1,12 @@
 require 'digest'
+require 'sidekiq-unique-jobs/middleware/unlock_order'
 
 module SidekiqUniqueJobs
   module Middleware
     module Client
       class UniqueJobs
+        include SidekiqUniqueJobs::Middleware::UnlockOrder
+
         attr_reader :item, :worker_class, :redis_pool
 
         def call(worker_class, item, queue, redis_pool = nil)
@@ -21,7 +24,15 @@ module SidekiqUniqueJobs
 
         def unique?
           if testing_enabled?
-            unique_for_connection?(SidekiqUniqueJobs.redis_mock)
+            set_unlock_order(worker_class)
+            if before_yield?
+              SidekiqUniqueJobs.redis_mock.del(payload_hash)
+            end
+            unique_for_connection?(SidekiqUniqueJobs.redis_mock).tap do
+              if after_yield?
+                SidekiqUniqueJobs.redis_mock.del(payload_hash) if after_yield?
+              end
+            end
           else
             if redis_pool
               redis_pool.with do |conn|
